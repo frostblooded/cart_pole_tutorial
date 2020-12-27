@@ -255,8 +255,9 @@ target_net.eval()
 optimizer = optim.Adam(params=policy_net.parameters(), lr=lr)
 
 episode_durations = []
+episode = 0
 
-for episode in range(num_episodes):
+while True:
     em.reset()
     state = em.get_state()
 
@@ -286,7 +287,16 @@ for episode in range(num_episodes):
             plot(episode_durations, 100)
             break
 
+    last_episode_duration = episode_durations[-1]
+
+    if last_episode_duration >= 195:
+        print("Win in {} episodes".format(len(episode_durations)))
+        input("Press any button to exit...")
+        break
+
     if episode % target_update == 0:
         target_net.load_state_dict(policy_net.state_dict())
+
+    episode += 1
 
 em.close()

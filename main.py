@@ -24,11 +24,10 @@ if is_ipython:
 
 
 class DQN(nn.Module):
-    def __init__(self, img_height, img_width):
+    def __init__(self):
         super().__init__()
 
-        self.fc1 = nn.Linear(in_features=img_height *
-                             img_width*3, out_features=24)
+        self.fc1 = nn.Linear(in_features=4, out_features=24)
         self.fc2 = nn.Linear(in_features=24, out_features=32)
         self.out = nn.Linear(in_features=32, out_features=2)
 
@@ -99,12 +98,10 @@ class CartPoleEnvManager():
         self.device = device
         self.env = gym.make('CartPole-v0').unwrapped
         self.env.reset()
-        self.current_screen = None
         self.done = False
 
     def reset(self):
         self.env.reset()
-        self.current_screen = None
 
     def close(self):
         self.env.close()
@@ -119,55 +116,8 @@ class CartPoleEnvManager():
         _, reward, self.done, _ = self.env.step(action.item())
         return torch.tensor([reward], device=self.device)
 
-    def just_starting(self):
-        return self.current_screen is None
-
     def get_state(self):
-        if self.just_starting() or self.done:
-            self.current_screen = self.get_processed_screen()
-            black_screen = torch.zeros_like(self.current_screen)
-            return black_screen
-        else:
-            s1 = self.current_screen
-            s2 = self.get_processed_screen()
-            self.current_screen = s2
-            return s2 - s1
-
-    def get_screen_height(self):
-        screen = self.get_processed_screen()
-        return screen.shape[2]
-
-    def get_screen_width(self):
-        screen = self.get_processed_screen()
-        return screen.shape[3]
-
-    def get_processed_screen(self):
-        screen = self.render('rgb_array').transpose(
-            (2, 0, 1))  # PyTorch expects CHW
-        screen = self.crop_screen(screen)
-        return self.transform_screen_data(screen)
-
-    def crop_screen(self, screen):
-        screen_height = screen.shape[1]
-
-        # Strip off top and bottom
-        top = int(screen_height * 0.4)
-        bottom = int(screen_height * 0.8)
-        screen = screen[:, top:bottom, :]
-        return screen
-
-    def transform_screen_data(self, screen):
-        # Convert to float, rescale, convert to tensor
-        screen = np.ascontiguousarray(screen, dtype=np.float32) / 255
-        screen = torch.from_numpy(screen)
-
-        # Use torchvision package to compose image transforms
-        resize = T.Compose([
-            T.ToPILImage(), T.Resize((40, 90)), T.ToTensor()
-        ])
-
-        # add a batch dimension (BCHW)
-        return resize(screen).unsqueeze(0).to(self.device)
+        return torch.tensor([self.env.state], dtype=torch.float, device=self.device)
 
 
 def plot(values, moving_avg_period):
@@ -248,8 +198,8 @@ strategy = EpsilonGreedyStrategy(eps_start, eps_end, eps_decay)
 agent = Agent(strategy, em.num_actions_available(), device)
 memory = ReplayMemory(memory_size)
 
-policy_net = DQN(em.get_screen_height(), em.get_screen_width()).to(device)
-target_net = DQN(em.get_screen_height(), em.get_screen_width()).to(device)
+policy_net = DQN().to(device)
+target_net = DQN().to(device)
 target_net.load_state_dict(policy_net.state_dict())
 target_net.eval()
 optimizer = optim.Adam(params=policy_net.parameters(), lr=lr)
@@ -264,6 +214,7 @@ while True:
     for timestep in count():
         action = agent.select_action(state, policy_net)
         reward = em.take_action(action)
+        em.render()
         next_state = em.get_state()
         memory.push(Experience(state, action, next_state, reward))
         state = next_state

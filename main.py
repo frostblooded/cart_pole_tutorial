@@ -32,7 +32,6 @@ class DQN(nn.Module):
         self.out = nn.Linear(in_features=32, out_features=2)
 
     def forward(self, t):
-        t = t.flatten(start_dim=1)
         t = F.relu(self.fc1(t))
         t = F.relu(self.fc2(t))
         t = self.out(t)
@@ -99,9 +98,11 @@ class CartPoleEnvManager():
         self.env = gym.make('CartPole-v0').unwrapped
         self.env.reset()
         self.done = False
+        self.steps = 0
 
     def reset(self):
         self.env.reset()
+        self.steps = 0
 
     def close(self):
         self.env.close()
@@ -113,7 +114,20 @@ class CartPoleEnvManager():
         return self.env.action_space.n
 
     def take_action(self, action):
-        _, reward, self.done, _ = self.env.step(action.item())
+        _, _, self.done, _ = self.env.step(action.item())
+        self.steps += 1
+
+        if self.done:
+            reward = -10
+        elif self.steps < 50:
+            reward = 1
+        elif self.steps >= 50:
+            reward = 2
+        elif self.steps >= 100:
+            reward = 3
+        elif self.steps >= 150:
+            reward = 4
+
         return torch.tensor([reward], device=self.device)
 
     def get_state(self):
